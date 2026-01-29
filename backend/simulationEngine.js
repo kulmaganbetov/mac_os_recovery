@@ -9,51 +9,130 @@
 /**
  * Generate simulation steps based on configuration
  * Different macOS versions and scenarios produce different step sequences
+ * Enhanced to include security level, user role, auth method, and CPU architecture
  */
 export function generateSimulation({ macosVersion, scenario, options }) {
   const steps = [];
   let stepId = 1;
 
-  // Helper function to add a step
-  const addStep = (command, output, type = 'info', delay = 800) => {
+  // Extract advanced options (with defaults for backward compatibility)
+  const advanced = options.advanced || {
+    securityLevel: 'medium',
+    userRole: 'standard',
+    authMethod: 'apple_id',
+    cpuArchitecture: 'apple_silicon'
+  };
+
+  // Helper function to add a step with explanation metadata
+  const addStep = (command, output, type = 'info', delay = 800, explanation = '') => {
     steps.push({
       id: stepId++,
       command,
       output,
       type, // 'info', 'success', 'warning', 'error'
-      delay
+      delay,
+      explanation: explanation || getStepExplanation(command, output) // For Log Explorer
     });
   };
 
-  // 1. Initial system detection
+  // 1. Initial system detection (varies by CPU architecture)
   addStep('detect_os', `macOS ${macosVersion} detected`, 'info', 1000);
-  addStep('system_info', `Architecture: arm64 (Apple Silicon)`, 'info', 600);
-  addStep('firmware_version', `Firmware: iBoot-8422.141.2`, 'info', 600);
 
-  // 2. Check system options
+  if (advanced.cpuArchitecture === 'apple_silicon') {
+    addStep('system_info', `Architecture: arm64 (Apple Silicon)`, 'info', 600);
+    addStep('firmware_version', `Firmware: iBoot-8422.141.2`, 'info', 600);
+    addStep('secure_enclave', `Secure Enclave: Available`, 'success', 700);
+  } else {
+    addStep('system_info', `Architecture: x86_64 (Intel)`, 'info', 600);
+    addStep('firmware_version', `Firmware: EFI v2.9.1`, 'info', 600);
+    addStep('t2_chip_check', `T2 Security Chip: ${macosVersion !== 'Mojave' ? 'Available' : 'Not Available'}`, 'info', 700);
+  }
+
+  // 2. Security Level Assessment
+  addStep('security_level_check', `Security Level: ${advanced.securityLevel.toUpperCase()}`, 'info', 800);
+
+  if (advanced.securityLevel === 'high') {
+    addStep('enhanced_security', 'Enhanced security protocols active', 'info', 900);
+    addStep('auth_requirements', 'Multiple authentication factors required', 'warning', 800);
+  }
+
+  // 3. User Role Detection
+  addStep('user_role_scan', `User Role: ${advanced.userRole === 'administrator' ? 'Administrator' : 'Standard User'}`, 'info', 700);
+
+  if (advanced.userRole === 'administrator') {
+    addStep('admin_privileges', 'Administrative privileges detected ✓', 'success', 700);
+  } else {
+    addStep('privilege_level', 'Standard user privileges (limited access)', 'warning', 700);
+  }
+
+  // 4. Check system options and dependencies
   if (options.recoveryMode) {
     addStep('check_recovery', 'Recovery Mode: Available ✓', 'success', 800);
   } else {
-    addStep('check_recovery', 'Recovery Mode: Not Available', 'warning', 800);
+    addStep('check_recovery', 'Recovery Mode: Not Available', 'error', 800);
+    // Critical failure scenario
+    if (scenario === 'lost_admin' || advanced.securityLevel === 'high') {
+      addStep('recovery_required', 'ERROR: Recovery Mode required for this scenario', 'error', 1000);
+      return {
+        steps,
+        result: 'error',
+        message: 'Recovery Mode is disabled - cannot proceed with this configuration',
+        metadata: { macosVersion, scenario, totalSteps: steps.length }
+      };
+    }
   }
 
   if (options.fileVault) {
     addStep('security_scan', 'FileVault Encryption: Enabled ✓', 'info', 700);
     addStep('keychain_check', 'Secure storage detected', 'info', 600);
+
+    if (advanced.securityLevel === 'high') {
+      addStep('encryption_verify', 'Strong encryption verification required', 'warning', 900);
+    }
   }
 
-  if (options.appleId) {
-    addStep('apple_id_check', 'Apple ID linked to system', 'success', 800);
+  // 5. Authentication Method Check
+  addStep('auth_method_detect', `Authentication: ${advanced.authMethod.replace('_', ' ').toUpperCase()}`, 'info', 800);
+
+  if (advanced.authMethod === 'apple_id') {
+    if (options.appleId) {
+      addStep('apple_id_check', 'Apple ID linked to system ✓', 'success', 800);
+      addStep('icloud_connectivity', 'iCloud services reachable', 'success', 700);
+    } else {
+      addStep('apple_id_missing', 'ERROR: Apple ID not configured', 'error', 1000);
+      if (advanced.securityLevel === 'high') {
+        return {
+          steps,
+          result: 'error',
+          message: 'High security requires Apple ID authentication, but Apple ID is not configured',
+          metadata: { macosVersion, scenario, totalSteps: steps.length }
+        };
+      }
+    }
+  } else if (advanced.authMethod === 'recovery_key') {
+    if (options.fileVault) {
+      addStep('recovery_key_check', 'FileVault recovery key authentication selected', 'info', 800);
+    } else {
+      addStep('recovery_key_error', 'WARNING: Recovery key requires FileVault', 'warning', 1000);
+    }
+  } else if (advanced.authMethod === 'local_account') {
+    addStep('local_auth', 'Local account password authentication', 'info', 700);
   }
 
   if (options.timeMachine) {
     addStep('backup_scan', 'Time Machine backups found (3 available)', 'success', 900);
   }
 
-  // 3. Scenario-specific steps
+  // 6. Scenario-specific steps with enhanced logic
   switch (scenario) {
     case 'forgotten_password':
       addStep('scenario_init', 'Initiating forgotten password recovery', 'info', 1000);
+
+      // Security level affects authentication complexity
+      if (advanced.securityLevel === 'high') {
+        addStep('multi_factor_init', 'Initiating multi-factor authentication...', 'info', 1200);
+        addStep('biometric_check', 'Checking for biometric data...', 'info', 1000);
+      }
 
       if (options.appleId) {
         addStep('apple_id_auth', 'Attempting Apple ID authentication...', 'info', 1500);
@@ -76,6 +155,17 @@ export function generateSimulation({ macosVersion, scenario, options }) {
       addStep('scenario_init', 'Initiating admin access recovery', 'info', 1000);
       addStep('admin_check', 'Scanning for administrator accounts...', 'info', 1200);
       addStep('admin_found', 'Found 0 accessible admin accounts', 'warning', 1000);
+
+      // Conflict: Standard user trying to recover admin access
+      if (advanced.userRole === 'standard' && advanced.securityLevel !== 'low') {
+        addStep('privilege_error', 'ERROR: Standard user cannot escalate to admin without Recovery Mode', 'error', 1200);
+        return {
+          steps,
+          result: 'error',
+          message: 'Standard user cannot recover administrator access with current security settings',
+          metadata: { macosVersion, scenario, totalSteps: steps.length }
+        };
+      }
 
       if (options.recoveryMode) {
         addStep('recovery_boot', 'Entering Recovery Mode...', 'info', 1800);
@@ -264,4 +354,37 @@ export function getInstructions({ scenario, result, macosVersion, options }) {
   }
 
   return instructions;
+}
+
+/**
+ * Get explanation for a specific step
+ * Used by the Log Explorer feature for clickable step details
+ */
+function getStepExplanation(command, output) {
+  const explanations = {
+    'detect_os': 'Identifies the installed macOS version to determine compatible recovery procedures.',
+    'system_info': 'Detects CPU architecture (Intel or Apple Silicon) which affects boot and recovery processes.',
+    'firmware_version': 'Checks firmware version for compatibility and security validation.',
+    'secure_enclave': 'Verifies the Secure Enclave on Apple Silicon for cryptographic operations.',
+    'security_level_check': 'Assesses configured security level (low/medium/high) to determine authentication requirements.',
+    'user_role_scan': 'Identifies user privilege level (Standard/Administrator) for permission validation.',
+    'check_recovery': 'Verifies if Recovery Mode is accessible - essential for most recovery operations.',
+    'security_scan': 'Checks FileVault encryption status which affects how passwords and keys are stored.',
+    'auth_method_detect': 'Determines which authentication method will be used for recovery.',
+    'apple_id_check': 'Confirms Apple ID linkage for cloud-based authentication options.',
+    'backup_scan': 'Searches for Time Machine backups which can restore corrupted accounts.',
+    'scenario_init': 'Initializes the recovery process specific to the selected scenario.',
+    'boot_recovery': 'Simulates booting into Recovery Mode (Command+R at startup).',
+    'recovery_tools': 'Loads Recovery Mode utilities including Terminal, Disk Utility, and Reset Password.',
+    'password_reset': 'Generates a secure token for password reset without requiring the old password.',
+    'reset_confirm': 'Validates that the password change was successful and updates system keychain.',
+    'admin_privileges': 'Confirms administrative access level for system modifications.',
+    'privilege_error': 'Standard users cannot escalate to admin without proper authentication.',
+    'multi_factor_init': 'High security requires additional authentication factors beyond just password.',
+    'session_close': 'Completes recovery process and prepares system for normal boot.',
+    'security_verify': 'Final security check to ensure no system integrity issues remain.',
+    'integrity_check': 'Validates system files and permissions are correct before restart.'
+  };
+
+  return explanations[command] || `Executes: ${command}`;
 }

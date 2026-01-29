@@ -73,16 +73,33 @@ export default function Landing() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
             <Button
               size="lg"
+              onClick={() => navigate('/dashboard')}
+              className="group"
+            >
+              Open Dashboard
+              <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
               onClick={() => navigate('/setup')}
               className="group"
             >
-              Start Recovery Simulation
-              <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              Quick Start (Legacy)
             </Button>
           </motion.div>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="mt-4 text-sm text-zinc-500"
+          >
+            🆕 Try the new interactive dashboard for full features
+          </motion.p>
         </motion.div>
 
         {/* MacBook Mockup */}
