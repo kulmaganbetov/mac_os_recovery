@@ -36,14 +36,12 @@ export default function DashboardSimulation() {
   const warnings = getConfigurationWarnings();
   const hasErrors = warnings.some(w => w.type === 'error');
 
-  // Check for warnings on mount
-  useEffect(() => {
-    if (warnings.length > 0 && !hasErrors) {
-      setShowWarnings(true);
-    } else if (hasErrors) {
-      setShowWarnings(true);
-    }
-  }, []);
+  // Check for warnings on mount - removed auto-show to give user control
+  // useEffect(() => {
+  //   if (warnings.length > 0) {
+  //     setShowWarnings(true);
+  //   }
+  // }, []);
 
   const handleStartSimulation = async () => {
     try {
@@ -209,7 +207,14 @@ export default function DashboardSimulation() {
           <div className="flex justify-center">
             <Button
               size="lg"
-              onClick={() => setShowWarnings(true)}
+              onClick={() => {
+                // If there are warnings, show dialog; otherwise start directly
+                if (warnings.length > 0) {
+                  setShowWarnings(true);
+                } else {
+                  handleStartSimulation();
+                }
+              }}
               className="group"
             >
               <Play className="mr-2 w-5 h-5" />
